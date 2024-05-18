@@ -1,0 +1,85 @@
+1. Implement the UserDetails in the User class
+2. In the UserRepository interface add a custom method (unimplemented) to get
+Users by username
+3. In the UserService implement a method to getUserByUsername, which makes a call
+to the repository method (from above) and gets the user by the username
+
+4. Create a BasicSecurityConfig class, it needs to have the following annotations:
+
+@Configuration
+@EnableWebSecurity
+
+5. Add the following to your config class:
+  @Bean
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
+        return httpSecurity
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/users/login", "/users/register").permitAll()
+                .anyRequest().authenticated()
+            )
+            .httpBasic(Customizer.withDefaults())
+            .build();
+    }
+
+6. Add the following to the class with main method
+  @Bean
+    public BCryptPasswordEncoder bCryptPasswordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+7. Add encoder to your UserService and make sure it is going to encode the password before creating the user
+
+    @Autowired
+    private  BCryptPasswordEncoder encoder;
+
+8. In the config class add this:
+
+@Bean
+public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    return authenticationConfiguration.getAuthenticationManager();
+}
+
+9. Add the following to your controller:
+
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+
+ @PostMapping("/login")
+    public ResponseEntity<String> basicLogin(@RequestParam("username") String username,
+        @RequestParam("password") String password) {
+        log.info("Request received for /users/login");
+        Authentication authentication = authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(username, password)
+        );
+        log.info("Authentication " + authentication);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        log.info("User details: " + userDetails);
+        return ResponseEntity.ok("User " + userDetails.getUsername() + " logged in successfully");
+    }
+
+10. Add this class:
+
+                  @Service
+                    public class AuthenticationService implements UserDetailsService {
+
+                        @Autowired
+                        private UserService userService;
+
+                        @Autowired
+                        public AuthenticationService(UserService userService) {
+                            this.userService = userService;
+                        }
+
+                        @Override
+                        public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+                            User user = userService.getUserByUsername(username);
+                            if (user == null) {
+                                throw new UsernameNotFoundException("User with username " + username + " was not found!");
+                            }
+                            return user;
+                        }
+                    }
